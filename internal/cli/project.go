@@ -119,9 +119,9 @@ func projectCmd() *command {
 					fmt.Fprintln(a.Out)
 					rows := [][]string{}
 					for _, s := range p.Services {
-						rows = append(rows, []string{s.Name, s.Source, portsText(s.Ports)})
+						rows = append(rows, []string{s.Name, s.Key(), s.Source, portsText(s.Ports)})
 					}
-					return a.table(nil, []string{"SERVICE", "SOURCE", "PORTS"}, rows)
+					return a.table(nil, []string{"SERVICE", "ID", "SOURCE", "PORTS"}, rows)
 				},
 			},
 			{
@@ -357,7 +357,7 @@ func serviceCmd() *command {
 					}
 					rows := [][]string{}
 					for _, s := range p.Services {
-						st, ok := state[s.Name]
+						st, ok := state[s.Key()]
 						status, ready, restarts, usage := "not deployed", "-", "-", "-"
 						if ok {
 							status, ready, restarts = st.State, fmt.Sprintf("%d/%d", st.Ready, st.Desired), fmt.Sprint(st.Restarts)
@@ -368,12 +368,12 @@ func serviceCmd() *command {
 								usage = fmt.Sprintf("%dm / %dMi", *st.CPUMilli, *st.MemoryBytes>>20)
 							}
 						}
-						rows = append(rows, []string{s.Name, s.Source, status, ready, restarts, usage, portsText(s.Ports)})
+						rows = append(rows, []string{s.Name, s.Key(), s.Source, status, ready, restarts, usage, portsText(s.Ports)})
 					}
 					if a.jsonOut {
 						return a.printJSON(map[string]any{"services": p.Services, "runtime": rt})
 					}
-					return a.table(nil, []string{"SERVICE", "SOURCE", "STATE", "READY", "RESTARTS", "CPU / MEM", "PORTS"}, rows)
+					return a.table(nil, []string{"SERVICE", "ID", "SOURCE", "STATE", "READY", "RESTARTS", "CPU / MEM", "PORTS"}, rows)
 				},
 			},
 			{

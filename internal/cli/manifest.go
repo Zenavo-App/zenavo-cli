@@ -30,9 +30,14 @@ func (a *App) loadManifest(p *api.Project) (*editableManifest, error) {
 	return m, nil
 }
 
-// service returns the named service's object.
+// service returns the object of the service with this ID (or name).
 func (m *editableManifest) service(name string) (map[string]any, error) {
 	list, _ := m.manifest["services"].([]any)
+	for _, raw := range list {
+		if svc, ok := raw.(map[string]any); ok && svc["id"] == name {
+			return svc, nil
+		}
+	}
 	for _, raw := range list {
 		if svc, ok := raw.(map[string]any); ok && svc["name"] == name {
 			return svc, nil

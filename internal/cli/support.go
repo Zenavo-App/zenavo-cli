@@ -328,7 +328,8 @@ func (a *App) currentProject() (*api.Project, error) {
 	return &list[i], nil
 }
 
-// currentService is --service, the saved service of this project, the only service, or one the user picks.
+// currentService is --service, the saved service of this project, the only service, or one the user picks. It
+// returns the service ID; --service takes the ID or the name.
 func (a *App) currentService(p *api.Project) (string, error) {
 	ref := a.service
 	if ref == "" && p.ID == a.cfg.Project {
@@ -336,8 +337,13 @@ func (a *App) currentService(p *api.Project) (string, error) {
 	}
 	if ref != "" {
 		for _, s := range p.Services {
+			if s.Key() == ref {
+				return s.Key(), nil
+			}
+		}
+		for _, s := range p.Services {
 			if s.Name == ref {
-				return s.Name, nil
+				return s.Key(), nil
 			}
 		}
 		return "", fmt.Errorf("project %s has no service %q; see zenavo service ls", p.Name, ref)
@@ -346,7 +352,7 @@ func (a *App) currentService(p *api.Project) (string, error) {
 	case len(p.Services) == 0:
 		return "", fmt.Errorf("project %s has no services", p.Name)
 	case len(p.Services) == 1:
-		return p.Services[0].Name, nil
+		return p.Services[0].Key(), nil
 	case !a.interactive:
 		return "", errors.New("no service selected: pass --service, or run: zenavo context set service")
 	}
@@ -358,7 +364,7 @@ func (a *App) currentService(p *api.Project) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return names[i], nil
+	return p.Services[i].Key(), nil
 }
 
 func (a *App) servers() ([]api.Server, error) {

@@ -42,10 +42,19 @@ type Port struct {
 }
 
 type ServicePreview struct {
+	ID        string   `json:"id"`
 	Name      string   `json:"name"`
 	Source    string   `json:"source"`
 	Variables []string `json:"variables"`
 	Ports     []Port   `json:"ports"`
+}
+
+// Key is the service's ID, which API routes take; servers from before service IDs only have the name.
+func (s ServicePreview) Key() string {
+	if s.ID != "" {
+		return s.ID
+	}
+	return s.Name
 }
 
 // Project is a project summary.

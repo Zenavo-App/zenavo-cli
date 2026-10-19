@@ -83,7 +83,7 @@ A full name (www.example.com) is your own domain: point its DNS at the server, t
 						}
 						for _, s := range out.Services {
 							for _, pt := range s.Ports {
-								if s.Name == name && pt.ID == port["id"] && pt.Domain != nil {
+								if s.Key() == name && pt.ID == port["id"] && pt.Domain != nil {
 									domain = *pt.Domain
 								}
 							}

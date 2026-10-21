@@ -88,6 +88,9 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	if api.IsStatus(err, 401) {
 		fmt.Fprintln(a.Err, "Sign in again with: zenavo auth login")
 	}
+	if hint := a.scopeHint(err); hint != "" {
+		fmt.Fprintln(a.Err, hint)
+	}
 	var ue *usageError
 	if errors.As(err, &ue) {
 		return 2

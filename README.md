@@ -15,11 +15,14 @@ Requires Go 1.26+. The only dependency outside the standard library is `golang.o
 
 ```sh
 zenavo auth login                         # shows a code and opens <console>/device
+zenavo auth login --scope deploy          # ask for less than full access: read, deploy or full (default)
 zenavo auth login --api https://console.example.com   # a self-hosted control plane
 zenavo auth login --with-token < key.txt  # an API key created under Account settings → API Keys
 ```
 
 Browser sign-in uses the OAuth 2.0 device flow: approve the request in the console after typing the code from your terminal (over SSH, open the address on any device). The CLI then receives its own key, named "CLI on <hostname>" and valid for 90 days.
+
+`--scope` sets the [permission](https://docs.zenavo.app/account/api-keys#permissions) the CLI asks for: `read` (look only), `deploy` (deploy and configure existing projects) or `full`. The approver may lower it or limit the key to some projects; the CLI saves what was granted and `zenavo auth status` shows it. A `403` caused by the key's scope prints how to sign in with a wider one, or says to use the console for what no API key may do.
 
 In CI, set `ZENAVO_TOKEN` (and `ZENAVO_API_URL` if not `https://zenavo.app`) instead of signing in, and pass `-i=false` so nothing prompts.
 
@@ -44,7 +47,7 @@ zenavo template deploy -f zeabur.yaml --var DOMAIN=blog
 
 | Command | |
 |---|---|
-| `auth login \| logout \| status` | Sign in with an API key; show who you are |
+| `auth login \| logout \| status` | Sign in through the browser (`--scope read\|deploy\|full`) or with an API key; show who you are and what the key may do |
 | `team ls \| current \| switch \| clear` | Teams (alias `workspace`); switching clears the saved project and service |
 | `context show \| set project \| set service \| clear` | Defaults that later commands use |
 | `server ls \| get` | Servers of the team (add servers in the console) |
@@ -71,6 +74,7 @@ Without a saved or given project or service, the CLI uses the only one, asks whe
 - `auth login` never takes the key as an argument, and `env set KEY` (without `=value`) reads the value without echo or from stdin, so secrets can stay out of shell history and `ps`.
 - `env ls` hides values unless `--reveal`; references such as `${POSTGRES_HOST}` are shown.
 - Destructive commands ask first: `project delete` needs the project name typed (or `--confirm <name>`); rollbacks and init commands need `--yes` without a terminal.
+- `auth login --scope read` or `--scope deploy` asks for a key that can do less; the API enforces the scope, the CLI only records it. Sign-in never sends a previously saved key.
 - `auth logout` only forgets the key locally; delete it in the console to revoke it.
 - Browser sign-in never puts the code in the link: the approver must type the code shown in their terminal, and the console shows the requesting device and network before the Approve button, so a phishing link cannot get a one-click approval. The CLI opens only `<--api>/device`, never an address the server sends.
 

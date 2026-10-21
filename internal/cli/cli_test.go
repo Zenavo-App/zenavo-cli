@@ -29,6 +29,9 @@ type fakeAPI struct {
 	jobFinal string
 	// device sign-in: the token poll answers with these statuses in order, then the token.
 	devicePolls []int
+	deviceStart map[string]any    // the last device code request
+	deviceGrant string            // extra JSON fields of the token response, e.g. `"scope":"read"`
+	forbid      map[string]string // method and path → 403 detail
 	calls       []string
 	bodies      map[string]map[string]any
 }
@@ -63,6 +66,8 @@ func (f *fakeAPI) serve(t *testing.T) func(http.ResponseWriter, *http.Request) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			if r.URL.Path == "/api/auth/device/code" {
+				f.deviceStart = nil
+				json.NewDecoder(r.Body).Decode(&f.deviceStart)
 				fmt.Fprint(w, `{"device_code":"dc_secret","user_code":"BCDF-GHJK","verification_uri":"https://evil.example/device","expires_in":600,"interval":5}`)
 				return
 			}
@@ -85,7 +90,11 @@ func (f *fakeAPI) serve(t *testing.T) func(http.ResponseWriter, *http.Request) {
 				}
 				return
 			}
-			fmt.Fprintf(w, `{"token":%q,"name":"CLI on test","expires":1}`, token)
+			grant := ""
+			if f.deviceGrant != "" {
+				grant = "," + f.deviceGrant
+			}
+			fmt.Fprintf(w, `{"token":%q,"name":"CLI on test","expires":1%s}`, token, grant)
 			return
 		}
 		if r.Header.Get("Authorization") != "Bearer "+token {
@@ -102,6 +111,10 @@ func (f *fakeAPI) serve(t *testing.T) func(http.ResponseWriter, *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)
 			json.NewEncoder(w).Encode(v)
+		}
+		if detail, ok := f.forbid[key]; ok {
+			reply(403, map[string]string{"detail": detail})
+			return
 		}
 		switch key {
 		case "GET /api/auth/me":
@@ -432,5 +445,121 @@ func TestDeviceLogin(t *testing.T) {
 	r = zenavo(t, filepath.Join(t.TempDir(), "c.json"), "", nil, "auth", "login", "--api", f.URL)
 	if r.code != 1 || !strings.Contains(r.stderr, "denied") {
 		t.Fatalf("denied: %+v", r)
+	}
+}
+
+func TestDeviceLoginScope(t *testing.T) {
+	deviceUnit = time.Millisecond
+	f := newFakeAPI(t)
+	openBrowser = func(string) error { return nil }
+
+	// Default: full, as before, and the CLI says which client it is.
+	cfg := filepath.Join(t.TempDir(), "config.json")
+	f.deviceGrant = `"scope":"full","project_ids":null`
+	r := zenavo(t, cfg, "", nil, "auth", "login", "--api", f.URL)
+	if r.code != 0 || f.deviceStart["scope"] != "full" || f.deviceStart["client"] != "cli" || f.deviceStart["client_name"] == "" {
+		t.Fatalf("default: %+v, body %v", r, f.deviceStart)
+	}
+	if c, _ := config.Load(cfg); c.Scope != "full" || c.ProjectIDs != nil {
+		t.Fatalf("saved %+v", c)
+	}
+
+	// The approver narrowed deploy to read and limited the key to one project: the CLI saves what was granted.
+	f.deviceGrant = `"scope":"read","project_ids":["proj_shop"]`
+	r = zenavo(t, cfg, "", nil, "auth", "login", "--scope", "deploy", "--api", f.URL)
+	if r.code != 0 || f.deviceStart["scope"] != "deploy" || !strings.Contains(r.stderr, "Requesting a deploy key") {
+		t.Fatalf("deploy: %+v, body %v", r, f.deviceStart)
+	}
+	c, _ := config.Load(cfg)
+	if c.Scope != "read" || len(c.ProjectIDs) != 1 || c.ProjectIDs[0] != "proj_shop" || c.Token != token {
+		t.Fatalf("saved %+v", c)
+	}
+	if !strings.Contains(r.stderr, "Key access: read") || !strings.Contains(r.stderr, "proj_shop") {
+		t.Fatalf("login output: %q", r.stderr)
+	}
+
+	// An API from before scopes returns none: the key is full and the CLI says so.
+	f.deviceGrant = ""
+	cfg2 := filepath.Join(t.TempDir(), "config.json")
+	r = zenavo(t, cfg2, "", nil, "auth", "login", "--scope", "read", "--api", f.URL)
+	if c, _ := config.Load(cfg2); r.code != 0 || c.Scope != "full" || !strings.Contains(r.stderr, "full access, not read") {
+		t.Fatalf("old API: %+v, saved %+v", r, c)
+	}
+
+	// Bad values and --scope with --with-token are usage errors; nothing is requested.
+	f.deviceStart = nil
+	for _, args := range [][]string{{"--scope", "admin"}, {"--scope", "read", "--with-token"}} {
+		r = zenavo(t, filepath.Join(t.TempDir(), "c.json"), token+"\n", nil, append([]string{"auth", "login", "--api", f.URL}, args...)...)
+		if r.code != 2 || f.deviceStart != nil {
+			t.Errorf("%v: %+v", args, r)
+		}
+	}
+}
+
+func TestAuthStatusShowsScope(t *testing.T) {
+	deviceUnit = time.Millisecond
+	f := newFakeAPI(t)
+	openBrowser = func(string) error { return nil }
+	cfg := filepath.Join(t.TempDir(), "config.json")
+	f.deviceGrant = `"scope":"deploy","project_ids":["proj_shop","proj_blog"]`
+	if r := zenavo(t, cfg, "", nil, "auth", "login", "--scope", "deploy", "--api", f.URL); r.code != 0 {
+		t.Fatalf("login: %+v", r)
+	}
+	r := zenavo(t, cfg, "", nil, "auth", "status")
+	if r.code != 0 || !strings.Contains(r.stdout, "Access: deploy (deploy and configure existing projects), limited to 2 project(s): proj_shop, proj_blog") {
+		t.Fatalf("status: %+v", r)
+	}
+	r = zenavo(t, cfg, "", nil, "auth", "status", "--json")
+	var out struct {
+		Scope      string   `json:"scope"`
+		ProjectIDs []string `json:"project_ids"`
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &out); err != nil || out.Scope != "deploy" || len(out.ProjectIDs) != 2 {
+		t.Fatalf("status --json: %+v, %v", r, err)
+	}
+	// ZENAVO_TOKEN is another key: the saved scope does not describe it.
+	r = zenavo(t, cfg, "", map[string]string{"ZENAVO_TOKEN": token}, "auth", "status")
+	if r.code != 0 || strings.Contains(r.stdout, "deploy") || !strings.Contains(r.stdout, "set when the key was created") {
+		t.Fatalf("env status: %+v", r)
+	}
+	// A pasted key has no known scope; logging in with one clears the old values.
+	if r := zenavo(t, cfg, token+"\n", nil, "auth", "login", "--with-token", "--api", f.URL); r.code != 0 {
+		t.Fatalf("with-token: %+v", r)
+	}
+	if c, _ := config.Load(cfg); c.Scope != "" || c.ProjectIDs != nil {
+		t.Fatalf("stale scope kept: %+v", c)
+	}
+	// Signing in with full access shows "all projects".
+	f.deviceGrant = `"scope":"full","project_ids":null`
+	zenavo(t, cfg, "", nil, "auth", "login", "--api", f.URL)
+	if r := zenavo(t, cfg, "", nil, "auth", "status"); !strings.Contains(r.stdout, "Access: full, all projects") {
+		t.Fatalf("full status: %+v", r)
+	}
+	zenavo(t, cfg, "", nil, "auth", "logout")
+	if c, _ := config.Load(cfg); c.Token != "" || c.Scope != "" || c.ProjectIDs != nil {
+		t.Fatalf("logout kept %+v", c)
+	}
+}
+
+func TestForbiddenScopeHints(t *testing.T) {
+	f, cfg := setup(t)
+	cases := []struct{ detail, want string }{
+		{"This access token has the read scope; this needs deploy", "zenavo auth login --scope deploy"},
+		{"This access token has the deploy scope; this needs full", "zenavo auth login --scope full"},
+		{"This access token is limited to some projects and cannot do this", "limited to some projects"},
+		{"Access tokens cannot do this; use the Zenavo console", "do it in the console: " + f.URL},
+	}
+	for _, c := range cases {
+		f.forbid = map[string]string{"POST /api/projects/proj_shop/services/web/restart": c.detail}
+		r := zenavo(t, cfg, "", nil, "service", "restart", "-p", "shop", "-s", "web", "--detach")
+		if r.code != 1 || !strings.Contains(r.stderr, c.detail) || !strings.Contains(r.stderr, c.want) {
+			t.Errorf("%q: %+v", c.detail, r)
+		}
+	}
+	// A 403 for another reason (a team role) gets no scope hint.
+	f.forbid = map[string]string{"POST /api/projects/proj_shop/services/web/restart": "Only owners and admins can do this"}
+	r := zenavo(t, cfg, "", nil, "service", "restart", "-p", "shop", "-s", "web", "--detach")
+	if r.code != 1 || strings.Contains(r.stderr, "auth login") || strings.Contains(r.stderr, "console") {
+		t.Fatalf("other 403: %+v", r)
 	}
 }

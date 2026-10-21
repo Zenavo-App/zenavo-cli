@@ -20,6 +20,10 @@ const DefaultAPI = "https://zenavo.app"
 type Config struct {
 	API   string `json:"api"`
 	Token string `json:"token,omitempty"`
+	// What the console approved for Token at sign-in: read, deploy or full, and the projects it is limited to
+	// (empty: all). Informational only; the API enforces them. Unknown for keys added with --with-token.
+	Scope      string   `json:"scope,omitempty"`
+	ProjectIDs []string `json:"project_ids,omitempty"`
 	// Context: later commands use these when no flag names them. Switching teams clears the rest,
 	// because projects and services belong to one team.
 	Team    string `json:"team,omitempty"`

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ func TestNormalizeAPI(t *testing.T) {
 
 func TestSaveLoad(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "zenavo", "config.json")
-	c := &Config{API: DefaultAPI, Token: "zv_pat_x", Team: "team_a", Project: "proj_a", Service: "web"}
+	c := &Config{API: DefaultAPI, Token: "zv_pat_x", Scope: "deploy", ProjectIDs: []string{"proj_a"}, Team: "team_a", Project: "proj_a", Service: "web"}
 	if err := c.Save(path); err != nil {
 		t.Fatal(err)
 	}
@@ -45,11 +46,11 @@ func TestSaveLoad(t *testing.T) {
 		t.Fatalf("mode %o, want 600", info.Mode().Perm())
 	}
 	got, err := Load(path)
-	if err != nil || *got != *c {
+	if err != nil || !reflect.DeepEqual(got, c) {
 		t.Fatalf("Load = %+v, %v", got, err)
 	}
 	missing, err := Load(filepath.Join(t.TempDir(), "none.json"))
-	if err != nil || *missing != (Config{}) {
+	if err != nil || !reflect.DeepEqual(missing, &Config{}) {
 		t.Fatalf("missing file: %+v, %v", missing, err)
 	}
 }

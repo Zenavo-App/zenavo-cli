@@ -1,6 +1,6 @@
 module github.com/Zenavo-App/zenavo-cli
 
-go 1.26.1
+go 1.26.9
 
 require golang.org/x/term v0.47.0
 

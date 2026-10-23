@@ -323,11 +323,27 @@ func serviceCmd() *command {
 				if err != nil {
 					return err
 				}
-				var q api.Queued
+				var q struct {
+					api.Queued
+					// A restart's: "variables" when it applies changed variables with the image the service runs.
+					Mode    string `json:"mode"`
+					Also    string `json:"also"`
+					Pending string `json:"pending"`
+				}
 				if err := a.post("/projects/"+api.P(p.ID)+"/services/"+api.P(name)+"/"+kind, nil, &q); err != nil {
 					return err
 				}
-				a.info("%s %s…", done, name)
+				if q.Mode == "variables" {
+					a.info("%s %s with its new variables (no rebuild)…", done, name)
+				} else {
+					a.info("%s %s…", done, name)
+				}
+				if q.Also != "" {
+					a.info("%s also use a changed variable; restart them too.", q.Also)
+				}
+				if q.Pending != "" {
+					a.info("%s", q.Pending)
+				}
 				return a.followJob(q.ID, detach)
 			},
 		}

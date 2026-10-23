@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/Zenavo-App/zenavo-cli/internal/api"
 )
 
 var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
@@ -27,8 +29,10 @@ func envCmd() *command {
 		name:    "env",
 		aliases: []string{"variable", "var"},
 		summary: "List and change a service's environment variables",
-		help: `Changes are saved to the project's configuration and take effect on the next deploy
-(pass --deploy to deploy the service right away).`,
+		help: `Changes are saved to the project's configuration. Variables are read when the service starts, so
+'zenavo service restart' puts changed ones into effect without building it again. A variable its build reads
+(a build argument references it), and changes besides variables, take a deploy (pass --deploy to deploy the
+service right away).`,
 		sub: []*command{
 			{
 				name: "ls", aliases: []string{"list"}, summary: "List variables (values hidden unless --reveal)",
@@ -189,6 +193,20 @@ func (a *App) editEnv(deploy bool, change func(env map[string]any) string) error
 	a.info("%s on %s", msg, name)
 	if deploy {
 		return a.startDeploy(p, name, false, false)
+	}
+	// What applying it takes: a restart when only variables changed, otherwise a deploy (and why).
+	var plan struct{ Needs, Reason string }
+	if err := a.get("/projects/"+api.P(p.ID)+"/services/"+api.P(name)+"/apply", &plan); err == nil {
+		switch plan.Needs {
+		case "nothing":
+			return nil
+		case "restart":
+			a.info("Apply with: zenavo service restart %s (no rebuild)", name)
+			return nil
+		}
+		if plan.Reason != "" {
+			a.info("%s", plan.Reason)
+		}
 	}
 	a.info("Apply with: zenavo deploy %s", name)
 	return nil

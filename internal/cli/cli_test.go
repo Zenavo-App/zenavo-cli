@@ -34,6 +34,8 @@ type fakeAPI struct {
 	forbid      map[string]string // method and path → 403 detail
 	calls       []string
 	bodies      map[string]map[string]any
+	usedIDs     []string // used_service_ids of the manifest
+	conflict    bool     // the next save fails as if someone else saved first
 }
 
 func newFakeAPI(t *testing.T) *fakeAPI {
@@ -116,7 +118,17 @@ func (f *fakeAPI) serve(t *testing.T) func(http.ResponseWriter, *http.Request) {
 			reply(403, map[string]string{"detail": detail})
 			return
 		}
+		if r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/api/projects/proj_shop/services/svc-") && strings.HasSuffix(r.URL.Path, "/deploy") {
+			reply(202, map[string]string{"id": "job_1"})
+			return
+		}
 		switch key {
+		case "GET /api/images/ports":
+			reply(200, map[string]any{"ports": []any{map[string]any{"port": 5432, "protocol": "tcp"}, map[string]any{"port": 8080, "protocol": "tcp"}, map[string]any{"port": 9000, "protocol": "udp"}}})
+		case "POST /api/git/refs":
+			reply(200, map[string]any{"url": f.bodies[key]["url"], "name": "api", "default_branch": "trunk"})
+		case "POST /api/git/plan":
+			reply(200, map[string]any{"dockerfile": "Dockerfile", "items": []any{map[string]any{"key": "port", "value": "3000"}}})
 		case "GET /api/auth/me":
 			reply(200, map[string]any{"user": map[string]any{"id": "user_1", "email": "dev@example.com"},
 				"teams": []any{map[string]any{"id": "team_me", "name": "Dev", "personal": true, "role": "owner"},
@@ -149,9 +161,13 @@ func (f *fakeAPI) serve(t *testing.T) func(http.ResponseWriter, *http.Request) {
 		case "GET /api/jobs":
 			reply(200, []any{map[string]any{"id": "job_1", "kind": "deploy", "status": "succeeded", "created": 1}})
 		case "GET /api/projects/proj_shop/manifest":
-			reply(200, map[string]any{"manifest": f.manifest, "revision": f.revision, "server_id": "srv_1"})
+			reply(200, map[string]any{"manifest": f.manifest, "revision": f.revision, "server_id": "srv_1", "used_service_ids": f.usedIDs})
 		case "PUT /api/projects/proj_shop":
 			body := f.bodies[key]
+			if f.conflict {
+				f.conflict = false
+				f.revision++
+			}
 			if int(body["revision"].(float64)) != f.revision {
 				reply(409, map[string]any{"detail": "Configuration changed; reload before saving"})
 				return

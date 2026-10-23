@@ -120,6 +120,8 @@ type ManifestDoc struct {
 	Manifest json.RawMessage `json:"manifest"`
 	Revision int             `json:"revision"`
 	ServerID string          `json:"server_id"`
+	// UsedServiceIDs are the IDs of the project's removed services too; a new service must not reuse one.
+	UsedServiceIDs []string `json:"used_service_ids"`
 }
 
 type ImportPreview struct {

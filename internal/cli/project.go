@@ -393,6 +393,7 @@ func serviceCmd() *command {
 				},
 			},
 			serviceAddCmd(),
+			serviceIconCmd(),
 			{
 				name: "deploy", args: "[service]", summary: "Build and deploy one service; the others stay as deployed",
 				flags: func(fs *flag.FlagSet) {

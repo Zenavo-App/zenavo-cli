@@ -42,9 +42,11 @@ type Port struct {
 }
 
 type ServicePreview struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Source    string   `json:"source"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	// Icon is the built-in icon the console shows: chosen, or inferred from the image; "" for a generic one.
+	Icon      string   `json:"icon,omitempty"`
 	Variables []string `json:"variables"`
 	Ports     []Port   `json:"ports"`
 }

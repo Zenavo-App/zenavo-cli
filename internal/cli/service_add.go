@@ -21,7 +21,7 @@ type addOptions struct {
 	image, git, database         string
 	branch, root, dockerfile     string
 	ports, volumes, env, secrets multiFlag
-	envFile                      string
+	envFile, icon                string
 	deploy, detach               bool
 }
 
@@ -56,6 +56,7 @@ pick a version with kind:version (postgresql:17).`,
 			fs.Var(&o.env, "env", "variable `KEY=value` (repeatable)")
 			fs.StringVar(&o.envFile, "env-file", "", "read KEY=value lines from a dotenv `file`")
 			fs.Var(&o.secrets, "secret", "variable `KEY` set to a generated password (repeatable)")
+			fs.StringVar(&o.icon, "icon", "", "the console's `icon` (default: inferred; see zenavo service icon --list)")
 			fs.BoolVar(&o.deploy, "deploy", false, "deploy the service after adding it")
 			fs.BoolVar(&o.detach, "detach", false, "with --deploy, do not wait for the job")
 		},
@@ -90,6 +91,9 @@ func (a *App) addService(name string, o *addOptions) error {
 	}
 	if o.detach && !o.deploy {
 		return usagef("--detach applies to --deploy")
+	}
+	if err := checkIcon(o.icon); err != nil {
+		return err
 	}
 	env, err := addEnv(o)
 	if err != nil {
@@ -130,6 +134,7 @@ func (a *App) addService(name string, o *addOptions) error {
 
 	// Look up what the source needs before changing anything: the default branch and the port.
 	src := map[string]any{}
+	icon := o.icon
 	switch {
 	case o.image != "":
 		src["image"] = o.image
@@ -161,8 +166,12 @@ func (a *App) addService(name string, o *addOptions) error {
 			dockerfile = "Dockerfile"
 		}
 		src = map[string]any{"git": repo, "ref": branch, "context": context, "dockerfile": dockerfile, "auto_deploy": false}
+		// The plan clones the repository, so it is read only for the port; its icon comes along unless one was given.
 		if len(o.ports) == 0 {
-			ports = a.gitPort(p.TeamID, src, base)
+			var detected string
+			if ports, detected = a.gitPlan(p.TeamID, src, base); icon == "" {
+				icon = detected
+			}
 		}
 	}
 
@@ -199,6 +208,9 @@ func (a *App) addService(name string, o *addOptions) error {
 	svc := map[string]any{"id": id, "name": name, "hostname": hostname, "source": src, "ports": portSpecs(ports)}
 	if len(volumes) > 0 {
 		svc["volumes"] = volumes
+	}
+	if icon != "" {
+		svc["icon"] = icon
 	}
 	if db != nil {
 		for k, v := range db.build(hostname, dbVersion) {
@@ -392,10 +404,12 @@ func (a *App) imagePorts(teamID, image string) []portRow {
 	return out
 }
 
-// gitPort reads the port from the build plan. zbpack images listen on 8080, so that is the default without a Dockerfile.
-func (a *App) gitPort(teamID string, src map[string]any, name string) []portRow {
+// gitPlan reads the port and the icon from the build plan: the detected language's icon, docker for a Dockerfile.
+// zbpack images listen on 8080, so that is the default port without a Dockerfile.
+func (a *App) gitPlan(teamID string, src map[string]any, name string) ([]portRow, string) {
 	var plan struct {
-		Dockerfile any `json:"dockerfile"`
+		Provider   string `json:"provider"`
+		Dockerfile any    `json:"dockerfile"`
 		Items      []struct {
 			Key   string `json:"key"`
 			Value any    `json:"value"`
@@ -405,20 +419,25 @@ func (a *App) gitPort(teamID string, src map[string]any, name string) []portRow 
 		"dockerfile": src["dockerfile"], "service": name}
 	if err := a.post("/git/plan", body, &plan); err != nil {
 		a.info("Could not read the build plan (%v); add a port with --port if the service takes connections", err)
-		return nil
+		return nil, ""
+	}
+	dockerfile := !(plan.Dockerfile == nil || plan.Dockerfile == false || plan.Dockerfile == "")
+	icon := providerIcons[plan.Provider]
+	if dockerfile {
+		icon = "docker"
 	}
 	for _, it := range plan.Items {
 		if it.Key == "port" {
 			if n, err := strconv.Atoi(fmt.Sprint(it.Value)); err == nil && n > 0 && n <= 65535 {
-				return []portRow{{n, "HTTP"}}
+				return []portRow{{n, "HTTP"}}, icon
 			}
 		}
 	}
-	if plan.Dockerfile == nil || plan.Dockerfile == false || plan.Dockerfile == "" {
-		return []portRow{{8080, "HTTP"}}
+	if !dockerfile {
+		return []portRow{{8080, "HTTP"}}, icon
 	}
 	a.info("The build plan names no port; add one with --port if the service takes connections")
-	return nil
+	return nil, icon
 }
 
 var githubShorthand = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)

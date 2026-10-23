@@ -39,6 +39,16 @@ type Port struct {
 	Port   int     `json:"port"`
 	Type   string  `json:"type"`
 	Domain *string `json:"domain"`
+	// Domains are the port's further domains; Domain is its first.
+	Domains []string `json:"domains,omitempty"`
+}
+
+// AllDomains is every domain of the port, its first one first.
+func (p Port) AllDomains() []string {
+	if p.Domain == nil {
+		return nil
+	}
+	return append([]string{*p.Domain}, p.Domains...)
 }
 
 type ServicePreview struct {

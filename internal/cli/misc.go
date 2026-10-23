@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/Zenavo-App/zenavo-cli/internal/api"
@@ -38,9 +39,9 @@ A full name (www.example.com) is your own domain: point its DNS at the server, t
 					rows := [][]string{}
 					for _, s := range p.Services {
 						for _, port := range s.Ports {
-							if port.Domain != nil {
-								list = append(list, row{*port.Domain, s.Name, port.Port})
-								rows = append(rows, []string{"https://" + *port.Domain, s.Name, fmt.Sprint(port.Port)})
+							for _, d := range port.AllDomains() {
+								list = append(list, row{d, s.Name, port.Port})
+								rows = append(rows, []string{"https://" + d, s.Name, fmt.Sprint(port.Port)})
 							}
 						}
 					}
@@ -73,23 +74,26 @@ A full name (www.example.com) is your own domain: point its DNS at the server, t
 					if err != nil {
 						return err
 					}
-					if d, ok := port["domain"].(string); ok && d != "" {
-						return fmt.Errorf("the port already serves %s; remove it first: zenavo domain rm %s", d, d)
-					}
 					if !strings.Contains(domain, ".") {
 						var out api.Project
 						if err := a.post("/projects/"+api.P(p.ID)+"/services/"+api.P(name)+"/domains", map[string]any{"name": domain, "port_id": port["id"]}, &out); err != nil {
 							return err
 						}
+						// The port may have other domains: the new one is <name>.<platform domain>.
 						for _, s := range out.Services {
 							for _, pt := range s.Ports {
-								if s.Key() == name && pt.ID == port["id"] && pt.Domain != nil {
-									domain = *pt.Domain
+								for _, d := range pt.AllDomains() {
+									if s.Key() == name && pt.ID == port["id"] && strings.HasPrefix(d, domain+".") {
+										domain = d
+									}
 								}
 							}
 						}
 					} else {
-						port["domain"] = domain
+						if slices.Contains(rawDomains(port), domain) {
+							return fmt.Errorf("%s already serves %s", name, domain)
+						}
+						setRawDomains(port, append(rawDomains(port), domain))
 						if err := a.saveManifest(m); err != nil {
 							return err
 						}
@@ -131,8 +135,8 @@ A full name (www.example.com) is your own domain: point its DNS at the server, t
 						svc, _ := raw.(map[string]any)
 						ports, _ := svc["ports"].([]any)
 						for _, rp := range ports {
-							if port, ok := rp.(map[string]any); ok && port["domain"] == domain {
-								port["domain"] = nil
+							if port, ok := rp.(map[string]any); ok && slices.Contains(rawDomains(port), domain) {
+								setRawDomains(port, slices.DeleteFunc(rawDomains(port), func(d string) bool { return d == domain }))
 								found, _ = svc["name"].(string)
 							}
 						}
@@ -322,5 +326,29 @@ func backupCmd() *command {
 				},
 			},
 		},
+	}
+}
+
+// rawDomains is every domain of a port in a manifest loaded as JSON: "domain" first, then "domains".
+func rawDomains(port map[string]any) []string {
+	first, _ := port["domain"].(string)
+	if first == "" {
+		return nil
+	}
+	out := []string{first}
+	more, _ := port["domains"].([]any)
+	for _, d := range more {
+		if s, ok := d.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// setRawDomains makes domains a port's domains: the first is "domain", the rest "domains".
+func setRawDomains(port map[string]any, domains []string) {
+	port["domain"], port["domains"] = nil, []string{}
+	if len(domains) > 0 {
+		port["domain"], port["domains"] = domains[0], domains[1:]
 	}
 }

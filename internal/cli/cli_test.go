@@ -368,9 +368,27 @@ func TestDomainCustomEditsManifest(t *testing.T) {
 	if r.code != 0 {
 		t.Fatalf("add: %+v", r)
 	}
-	port := f.manifest["services"].([]any)[0].(map[string]any)["ports"].([]any)[0].(map[string]any)
-	if port["domain"] != "www.example.com" {
-		t.Fatalf("port %v", port)
+	port := func() map[string]any {
+		return f.manifest["services"].([]any)[0].(map[string]any)["ports"].([]any)[0].(map[string]any)
+	}
+	if port()["domain"] != "www.example.com" {
+		t.Fatalf("port %v", port())
+	}
+	// A port takes more domains; removing the first moves the next one up.
+	if r := zenavo(t, cfg, "", nil, "domain", "add", "example.com", "-p", "shop", "-s", "web"); r.code != 0 {
+		t.Fatalf("second add: %+v", r)
+	}
+	if p := port(); p["domain"] != "www.example.com" || fmt.Sprint(p["domains"]) != "[example.com]" {
+		t.Fatalf("port after a second domain %v", p)
+	}
+	if r := zenavo(t, cfg, "", nil, "domain", "add", "example.com", "-p", "shop", "-s", "web"); r.code == 0 {
+		t.Fatal("the same domain added twice")
+	}
+	if r := zenavo(t, cfg, "", nil, "domain", "rm", "www.example.com", "-p", "shop"); r.code != 0 {
+		t.Fatalf("rm: %+v", r)
+	}
+	if p := port(); p["domain"] != "example.com" || fmt.Sprint(p["domains"]) != "[]" {
+		t.Fatalf("port after removing the first %v", p)
 	}
 }
 

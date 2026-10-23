@@ -212,7 +212,8 @@ func TestServiceAddGit(t *testing.T) {
 	if !reflect.DeepEqual(svc["source"], want) {
 		t.Errorf("source: %v", svc["source"])
 	}
-	if svc["name"] != "api" || svc["ports"].([]any)[0].(map[string]any)["port"] != float64(3000) {
+	// The plan's Dockerfile build gives the docker icon.
+	if svc["name"] != "api" || svc["ports"].([]any)[0].(map[string]any)["port"] != float64(3000) || svc["icon"] != "docker" {
 		t.Errorf("%v", svc)
 	}
 	plan := f.bodies["POST /api/git/plan"]

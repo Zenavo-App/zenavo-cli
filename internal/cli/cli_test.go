@@ -55,7 +55,7 @@ func (f *fakeAPI) serve(t *testing.T) func(http.ResponseWriter, *http.Request) {
 		return map[string]any{"id": "proj_shop", "team_id": "team_me", "name": "shop", "server_id": "srv_1", "revision": f.revision,
 			"active_job": "job_old", "running": true, "created": 1700000000, "ready": true, "blockers": []string{},
 			"services": []any{map[string]any{"name": "web", "source": "Git", "ports": []any{map[string]any{"id": "web", "port": 8080, "type": "HTTP"}}},
-				map[string]any{"name": "db", "source": "postgres:16", "ports": []any{}}}}
+				map[string]any{"name": "db", "source": "postgres:16", "icon": "postgresql", "ports": []any{}}}}
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()

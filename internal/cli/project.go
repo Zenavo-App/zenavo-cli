@@ -271,8 +271,8 @@ func portsText(ports []api.Port) string {
 	var out []string
 	for _, p := range ports {
 		s := fmt.Sprintf("%d/%s", p.Port, strings.ToLower(p.Type))
-		if p.Domain != nil {
-			s += " " + *p.Domain
+		for _, d := range p.AllDomains() {
+			s += " " + d
 		}
 		out = append(out, s)
 	}

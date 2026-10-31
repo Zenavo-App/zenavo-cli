@@ -11,6 +11,10 @@ make dist             # dist/zenavo_<os>_<arch> for macOS, Linux and Windows, pl
 
 Requires Go 1.26+. The only dependency outside the standard library is `golang.org/x/term` (hidden input).
 
+## Releasing
+
+Push a tag from `main`: `git tag v0.1.0 && git push origin v0.1.0`. The Release workflow tests, runs `make dist` with the tag as the version and publishes the binaries and `SHA256SUMS` as the tag's GitHub release. A tag with a hyphen (`v0.2.0-rc.1`) becomes a prerelease.
+
 ## Sign in
 
 ```sh

@@ -7,12 +7,14 @@ The Zenavo command line: deploy and operate projects on your own servers from a 
 Download the binary for your system from the [latest release](https://github.com/Zenavo-App/zenavo-cli/releases/latest) (`zenavo_<os>_<arch>`, for `darwin`, `linux` and `windows`), for example on macOS with Apple silicon:
 
 ```sh
-curl -fsSLo zenavo https://github.com/Zenavo-App/zenavo-cli/releases/latest/download/zenavo_darwin_arm64
-chmod +x zenavo && sudo mv zenavo /usr/local/bin/
+base=https://github.com/Zenavo-App/zenavo-cli/releases/latest/download
+curl -fsSLO $base/zenavo_darwin_arm64 -O $base/SHA256SUMS
+shasum -a 256 -c SHA256SUMS --ignore-missing
+chmod +x zenavo_darwin_arm64 && sudo mv zenavo_darwin_arm64 /usr/local/bin/zenavo
 zenavo version
 ```
 
-`SHA256SUMS` in the release lists each file's checksum (`shasum -a 256 -c SHA256SUMS --ignore-missing`). Or build from source:
+`shasum` checks the file against the release's `SHA256SUMS` before you install it. Or build from source:
 
 ```sh
 make build            # ./zenavo for this machine

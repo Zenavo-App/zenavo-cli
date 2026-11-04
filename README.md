@@ -1,6 +1,8 @@
 # zenavo-cli
 
-The Zenavo command line: deploy and operate projects on your own servers from a terminal or CI. It talks to the [REST API](https://docs.zenavo.app/api/overview) with an [API key](https://docs.zenavo.app/account/api-keys), and its command layout follows Zeabur's CLI (`auth`, `workspace`, `context`, `project`, `service`, `deployment`) so moving over is easy.
+The Zenavo command line: deploy and operate projects on your own servers from a terminal or CI. It talks to the [REST API](https://docs.zenavo.app/api/overview) with an [API key](https://docs.zenavo.app/account/api-keys), and its command layout follows Zeabur's CLI (`auth`, `workspace`, `context`, `project`, `service`, `deployment`).
+
+Full reference: [docs.zenavo.app/cli](https://docs.zenavo.app/cli).
 
 ## Install
 
@@ -22,10 +24,6 @@ make dist             # dist/zenavo_<os>_<arch> for macOS, Linux and Windows, pl
 ```
 
 Requires Go 1.26+. The only dependency outside the standard library is `golang.org/x/term` (hidden input).
-
-## Releasing
-
-Push a tag from `main`: `git tag v0.1.0 && git push origin v0.1.0`. The Release workflow tests, runs `make dist` with the tag as the version and publishes the binaries and `SHA256SUMS` as the tag's GitHub release. A tag with a hyphen (`v0.2.0-rc.1`) becomes a prerelease.
 
 ## Sign in
 
@@ -105,3 +103,7 @@ Without a saved or given project or service, the CLI uses the only one, asks whe
 - `internal/cli` — command tree, flags, prompts, context resolution
 - `internal/api` — HTTP client (no redirects, SSE for live logs) and response types
 - `internal/config` — config file, permissions and API origin checks
+
+## Releasing
+
+Push a tag from `main`: `git tag v0.1.0 && git push origin v0.1.0`. The Release workflow tests, runs `make dist` with the tag as the version and publishes the binaries and `SHA256SUMS` as the tag's GitHub release. A tag with a hyphen (`v0.2.0-rc.1`) becomes a prerelease.

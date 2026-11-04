@@ -107,3 +107,7 @@ Without a saved or given project or service, the CLI uses the only one, asks whe
 ## Releasing
 
 Push a tag from `main`: `git tag v0.1.0 && git push origin v0.1.0`. The Release workflow tests, runs `make dist` with the tag as the version and publishes the binaries and `SHA256SUMS` as the tag's GitHub release. A tag with a hyphen (`v0.2.0-rc.1`) becomes a prerelease.
+
+## License
+
+[Apache License 2.0](LICENSE)

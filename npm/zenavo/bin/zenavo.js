@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Runs the zenavo binary that npm installed for this machine: one of this package's optional dependencies,
-// @zenavo/cli-<platform>-<arch>, each made for a single system. Arguments, input and output go straight through, and
+// @zenavo-app/cli-<platform>-<arch>, each made for a single system. Arguments, input and output go straight through, and
 // zenavo's exit code becomes this one's. Nothing runs at install time.
 'use strict'
 
 const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 
-const pkg = `@zenavo/cli-${process.platform}-${process.arch}`
+const pkg = `@zenavo-app/cli-${process.platform}-${process.arch}`
 const exe = process.platform === 'win32' ? 'zenavo.exe' : 'zenavo'
 
 let bin

@@ -28,7 +28,7 @@ npm install -g zenavo                                 # npm; or run once with np
 go install github.com/Zenavo-App/zenavo-cli/cmd/zenavo@latest   # Go 1.26+, from source
 ```
 
-The npm package installs only the binary for your system, from `@zenavo/cli-<platform>-<arch>`, and runs nothing at install time. Every release also lists each binary on its own (`zenavo_<os>_<arch>` for `darwin`, `linux` and `windows`, on `amd64` and `arm64`) with `SHA256SUMS`. To build from source:
+The npm package installs only the binary for your system, from `@zenavo-app/cli-<platform>-<arch>`, and runs nothing at install time. Every release also lists each binary on its own (`zenavo_<os>_<arch>` for `darwin`, `linux` and `windows`, on `amd64` and `arm64`) with `SHA256SUMS`. To build from source:
 
 ```sh
 make build            # ./zenavo for this machine

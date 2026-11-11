@@ -3,7 +3,7 @@
 //
 //   node scripts/npm-packages.mjs v0.2.0 dist out/npm
 //
-// out/npm/cli-<platform>-<arch> is @zenavo/cli-<platform>-<arch>, holding one binary and limited by os and cpu to the
+// out/npm/cli-<platform>-<arch> is @zenavo-app/cli-<platform>-<arch>, holding one binary and limited by os and cpu to the
 // system it runs on. out/npm/zenavo is zenavo itself: a small launcher (npm/zenavo) that depends on every platform
 // package optionally, so npm installs only the one for this machine. Publish the platform packages first.
 
@@ -40,7 +40,7 @@ export function build(tag, dist, out) {
 
   const optional = {}
   for (const p of platforms) {
-    const name = `@zenavo/cli-${p.os}-${p.cpu}`
+    const name = `@zenavo-app/cli-${p.os}-${p.cpu}`
     const exe = p.goos === 'windows' ? 'zenavo.exe' : 'zenavo'
     const from = path.join(dist, `zenavo_${p.goos}_${p.goarch}${p.goos === 'windows' ? '.exe' : ''}`)
     if (!fs.existsSync(from)) throw new Error(`missing ${from}`)

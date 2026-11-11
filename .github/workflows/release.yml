@@ -3,7 +3,7 @@ name: Release
 # scripts as a GitHub release of that tag; `zenavo version` prints the tag. Then, from that release's own files:
 #   - homebrew: writes Formula/zenavo.rb in Zenavo-App/homebrew-tap (needs the HOMEBREW_TAP_DEPLOY_KEY secret, a
 #     deploy key with write access to that repository and nothing else);
-#   - npm: publishes zenavo and @zenavo/cli-<platform>-<arch> with provenance, through npm trusted publishing for
+#   - npm: publishes zenavo and @zenavo-app/cli-<platform>-<arch> with provenance, through npm trusted publishing for
 #     this workflow (or the NPM_TOKEN secret, until that is set up).
 # A tag with a hyphen (v0.3.0-rc.1) is a prerelease: npm gets it under the "next" tag, and Homebrew does not get it.
 # Each later job is safe to re-run on its own.

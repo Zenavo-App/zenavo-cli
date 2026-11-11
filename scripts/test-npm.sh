@@ -25,7 +25,7 @@ mkdir "$work/tgz"
 # Both packages, offline: the other platforms' optional packages are skipped.
 mkdir "$work/app" && cd "$work/app"
 npm init -y >/dev/null
-npm install --offline --silent "$work/tgz/zenavo-0.0.0-test.tgz" "$work/tgz/zenavo-cli-$platform-0.0.0-test.tgz"
+npm install --offline --silent "$work/tgz/zenavo-0.0.0-test.tgz" "$work/tgz/zenavo-app-cli-$platform-0.0.0-test.tgz"
 out=$(npx --no-install zenavo version)
 echo "$out"
 case $out in "zenavo "*) ;; *)
@@ -43,7 +43,7 @@ fi
 mkdir "$work/bare" && cd "$work/bare"
 npm init -y >/dev/null
 npm install --offline --silent "$work/tgz/zenavo-0.0.0-test.tgz"
-[ ! -e "node_modules/@zenavo/cli-$platform" ] || {
+[ ! -e "node_modules/@zenavo-app/cli-$platform" ] || {
 	echo "FAIL: the platform package came from somewhere" >&2
 	exit 1
 }

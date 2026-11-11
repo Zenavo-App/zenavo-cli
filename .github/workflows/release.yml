@@ -80,10 +80,4 @@ jobs:
         run: |
           tag=latest; case "$GITHUB_REF_NAME" in *-*) tag=next;; esac
           node scripts/npm-packages.mjs "$GITHUB_REF_NAME" dist out
-          # The platform packages first, so zenavo never points at a version that is not there yet.
-          for dir in out/cli-* out/zenavo; do
-            name=$(node -p "require('./$dir/package.json').name")
-            version=$(node -p "require('./$dir/package.json').version")
-            if npm view "$name@$version" version >/dev/null 2>&1; then echo "$name@$version is already published"; continue; fi
-            npm publish "$dir" --provenance --access public --tag "$tag"
-          done
+          sh scripts/npm-publish.sh out "$tag"

@@ -37,8 +37,9 @@ jobs:
       - run: make dist VERSION=v0.0.0-test
       - run: sh scripts/test-install.sh
       - run: sh scripts/test-npm.sh
-      - name: npm publish, dry run
+      - name: npm stage publish, dry run
         run: |
+          npm install -g npm@12.2.2
           node scripts/npm-packages.mjs v0.0.0-test dist out
           sh scripts/npm-publish.sh out next --dry-run
       - if: runner.os == 'macOS'

@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 permissions:
   contents: read
@@ -16,4 +16,41 @@ jobs:
       - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
       - run: go test ./...
+      - run: shellcheck install.sh scripts/*.sh
       - run: make dist
+
+  # Every way of installing, tried on the machines it is for, against binaries built here.
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: make dist VERSION=v0.0.0-test
+      - run: sh scripts/test-install.sh
+      - run: sh scripts/test-npm.sh
+      - if: runner.os == 'macOS'
+        run: sh scripts/test-brew.sh
+
+  install-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - shell: bash
+        run: |
+          mkdir dist
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/Zenavo-App/zenavo-cli/internal/cli.Version=v0.0.0-test" -o dist/zenavo_windows_amd64.exe ./cmd/zenavo
+          cd dist && sha256sum zenavo_* > SHA256SUMS
+      - shell: pwsh
+        run: ./scripts/test-install.ps1

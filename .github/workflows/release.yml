@@ -1,14 +1,22 @@
 name: Release
-# Pushing a tag like v0.1.0 tests, cross-compiles (make dist) and publishes the binaries and SHA256SUMS as a
-# GitHub release of that tag. `zenavo version` prints the tag.
+# Pushing a tag like v0.2.0 tests, cross-compiles (make dist) and publishes the binaries, SHA256SUMS and the install
+# scripts as a GitHub release of that tag; `zenavo version` prints the tag. Then, from that release's own files:
+#   - homebrew: writes Formula/zenavo.rb in Zenavo-App/homebrew-tap (needs the HOMEBREW_TAP_DEPLOY_KEY secret, a
+#     deploy key with write access to that repository and nothing else);
+#   - npm: publishes zenavo and @zenavo/cli-<platform>-<arch> with provenance, through npm trusted publishing for
+#     this workflow (or the NPM_TOKEN secret, until that is set up).
+# A tag with a hyphen (v0.3.0-rc.1) is a prerelease: npm gets it under the "next" tag, and Homebrew does not get it.
+# Each later job is safe to re-run on its own.
 on:
   push:
     tags: ['v*']
 permissions:
-  contents: write
+  contents: read
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -19,7 +27,63 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        # A tag with a hyphen (v0.2.0-rc.1) is published as a prerelease.
         run: |
           pre=; case "$GITHUB_REF_NAME" in *-*) pre=--prerelease;; esac
-          gh release create "$GITHUB_REF_NAME" dist/zenavo_* dist/SHA256SUMS --verify-tag --generate-notes $pre
+          gh release create "$GITHUB_REF_NAME" dist/zenavo_* dist/SHA256SUMS install.sh install.ps1 --verify-tag --generate-notes $pre
+
+  homebrew:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checksums of the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$GITHUB_REF_NAME" --pattern SHA256SUMS --dir release
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Zenavo-App/homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          path: tap
+      - name: Update the formula
+        run: |
+          mkdir -p tap/Formula
+          scripts/brew-formula.sh "$GITHUB_REF_NAME" release/SHA256SUMS > tap/Formula/zenavo.rb
+          cd tap
+          git add Formula/zenavo.rb
+          if git diff --cached --quiet; then echo "already up to date"; exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "zenavo ${GITHUB_REF_NAME#v}"
+          git push
+
+  npm:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Binaries of the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --pattern 'zenavo_*' --pattern SHA256SUMS --dir dist
+          cd dist && sha256sum -c SHA256SUMS
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          tag=latest; case "$GITHUB_REF_NAME" in *-*) tag=next;; esac
+          node scripts/npm-packages.mjs "$GITHUB_REF_NAME" dist out
+          # The platform packages first, so zenavo never points at a version that is not there yet.
+          for dir in out/cli-* out/zenavo; do
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then echo "$name@$version is already published"; continue; fi
+            npm publish "$dir" --provenance --access public --tag "$tag"
+          done

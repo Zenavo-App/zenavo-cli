@@ -6,17 +6,29 @@ Full reference: [docs.zenavo.app/cli](https://docs.zenavo.app/cli).
 
 ## Install
 
-Download the binary for your system from the [latest release](https://github.com/Zenavo-App/zenavo-cli/releases/latest) (`zenavo_<os>_<arch>`, for `darwin`, `linux` and `windows`), for example on macOS with Apple silicon:
+macOS and Linux:
 
 ```sh
-base=https://github.com/Zenavo-App/zenavo-cli/releases/latest/download
-curl -fsSLO $base/zenavo_darwin_arm64 -O $base/SHA256SUMS
-shasum -a 256 -c SHA256SUMS --ignore-missing
-chmod +x zenavo_darwin_arm64 && sudo mv zenavo_darwin_arm64 /usr/local/bin/zenavo
-zenavo version
+curl -fsSL https://zenavo.app/install.sh | sh
 ```
 
-`shasum` checks the file against the release's `SHA256SUMS` before you install it. Or build from source:
+Windows (PowerShell):
+
+```powershell
+irm https://zenavo.app/install.ps1 | iex
+```
+
+The scripts ([install.sh](install.sh), [install.ps1](install.ps1)) download the binary for your system from the [latest release](https://github.com/Zenavo-App/zenavo-cli/releases/latest), check it against the release's `SHA256SUMS` and put it on your `PATH`, without root or administrator rights. `ZENAVO_VERSION=v0.2.0` picks a release, `ZENAVO_INSTALL_DIR` the directory and `ZENAVO_DOWNLOAD_URL` a mirror.
+
+Or with a package manager:
+
+```sh
+brew install zenavo-app/tap/zenavo                    # Homebrew, macOS and Linux
+npm install -g zenavo                                 # npm; or run once with npx zenavo
+go install github.com/Zenavo-App/zenavo-cli/cmd/zenavo@latest   # Go 1.26+, from source
+```
+
+The npm package installs only the binary for your system, from `@zenavo/cli-<platform>-<arch>`, and runs nothing at install time. Every release also lists each binary on its own (`zenavo_<os>_<arch>` for `darwin`, `linux` and `windows`, on `amd64` and `arm64`) with `SHA256SUMS`. To build from source:
 
 ```sh
 make build            # ./zenavo for this machine
@@ -106,7 +118,9 @@ Without a saved or given project or service, the CLI uses the only one, asks whe
 
 ## Releasing
 
-Push a tag from `main`: `git tag v0.1.0 && git push origin v0.1.0`. The Release workflow tests, runs `make dist` with the tag as the version and publishes the binaries and `SHA256SUMS` as the tag's GitHub release. A tag with a hyphen (`v0.2.0-rc.1`) becomes a prerelease.
+Push a tag from `main`: `git tag v0.2.0 && git push origin v0.2.0`. The Release workflow tests, runs `make dist` with the tag as the version and publishes the binaries, `SHA256SUMS`, `install.sh` and `install.ps1` as the tag's GitHub release. From that release it then updates `Formula/zenavo.rb` in [Zenavo-App/homebrew-tap](https://github.com/Zenavo-App/homebrew-tap) and publishes the npm packages with provenance. A tag with a hyphen (`v0.3.0-rc.1`) becomes a prerelease: npm gets it under `next`, Homebrew does not get it. `https://zenavo.app/install.sh` and `install.ps1` redirect to the latest release's copies.
+
+Before a release, `make dist VERSION=v0.0.0-test` and then `scripts/test-install.sh`, `scripts/test-npm.sh` and `scripts/test-brew.sh` (macOS, Homebrew) try each way of installing locally; CI runs them on Linux, macOS and Windows.
 
 ## License
 

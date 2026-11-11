@@ -1,8 +1,9 @@
 #!/bin/sh
-# Publishes the npm packages that scripts/npm-packages.mjs made in <out>, the platform packages first so that zenavo
-# never points at a version that is not there yet. A version already on npm is skipped, so a failed run can simply be
-# repeated. The release workflow runs it with provenance; CI runs it with --dry-run to check it before a release
-# depends on it.
+# Stages the npm packages that scripts/npm-packages.mjs made in <out> (npm stage publish, npm 12 or later), the
+# platform packages first so that zenavo never points at a version that is not there yet. Staged packages are not
+# public until a maintainer approves them with 2FA, in the same order: npm stage list, then npm stage approve <id>.
+# A version already published is skipped. One already staged makes npm refuse it again: approve or reject it first.
+# The release workflow runs this with provenance; CI runs it with --dry-run before a release depends on it.
 #
 #   scripts/npm-publish.sh <out> <npm-tag> [--dry-run]
 
@@ -23,6 +24,10 @@ case $mode in
 	exit 2
 	;;
 esac
+npm stage --help >/dev/null 2>&1 || {
+	echo "this npm ($(npm -v)) cannot stage packages; npm 12 or later is needed" >&2
+	exit 1
+}
 
 n=0
 for dir in "$out"/cli-* "$out"/zenavo; do
@@ -38,7 +43,9 @@ for dir in "$out"/cli-* "$out"/zenavo; do
 		echo "$name@$version is already published"
 		continue
 	fi
-	npm publish "$abs" $flags --access public --tag "$tag"
+	npm stage publish "$abs" $flags --access public --tag "$tag"
 	n=$((n + 1))
 done
-[ "$n" -gt 0 ] || echo "nothing to publish"
+if [ "$n" -gt 0 ] && [ "$mode" != --dry-run ]; then
+	echo "Staged $n package(s). Approve the @zenavo-app/cli-* ones first, then zenavo: npm stage list, npm stage approve <id>."
+fi

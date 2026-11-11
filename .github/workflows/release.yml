@@ -3,17 +3,31 @@ name: Release
 # scripts as a GitHub release of that tag; `zenavo version` prints the tag. Then, from that release's own files:
 #   - homebrew: writes Formula/zenavo.rb in Zenavo-App/homebrew-tap (needs the HOMEBREW_TAP_DEPLOY_KEY secret, a
 #     deploy key with write access to that repository and nothing else);
-#   - npm: publishes zenavo and @zenavo-app/cli-<platform>-<arch> with provenance, through npm trusted publishing for
-#     this workflow (or the NPM_TOKEN secret, until that is set up).
+#   - npm: stages zenavo and @zenavo-app/cli-<platform>-<arch> with provenance through npm trusted publishing (no
+#     token). Nothing is public until a maintainer approves each staged package with 2FA (npm stage approve, or on
+#     npmjs.com), the platform packages before zenavo.
 # A tag with a hyphen (v0.3.0-rc.1) is a prerelease: npm gets it under the "next" tag, and Homebrew does not get it.
-# Each later job is safe to re-run on its own.
+# Run the workflow by hand with a tag to do the npm or Homebrew step again for a release that already exists.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing release, such as v0.2.2
+        required: true
+      target:
+        description: What to publish it to again
+        type: choice
+        options: [npm, homebrew, both]
+        default: npm
 permissions:
   contents: read
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 jobs:
   release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,24 +37,28 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make test
-      - run: make dist VERSION="$GITHUB_REF_NAME"
+      - run: make dist VERSION="$TAG"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pre=; case "$GITHUB_REF_NAME" in *-*) pre=--prerelease;; esac
-          gh release create "$GITHUB_REF_NAME" dist/zenavo_* dist/SHA256SUMS install.sh install.ps1 --verify-tag --generate-notes $pre
+          pre=; case "$TAG" in *-*) pre=--prerelease;; esac
+          gh release create "$TAG" dist/zenavo_* dist/SHA256SUMS install.sh install.ps1 --verify-tag --generate-notes $pre
 
   homebrew:
     needs: release
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: >-
+      !cancelled() && !contains(inputs.tag || github.ref_name, '-') &&
+      (needs.release.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.target != 'npm'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Checksums of the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "$GITHUB_REF_NAME" --pattern SHA256SUMS --dir release
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a release tag: $TAG"; exit 1; }
+          gh release download "$TAG" --pattern SHA256SUMS --dir release
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Zenavo-App/homebrew-tap
@@ -49,15 +67,18 @@ jobs:
       - name: Update the formula
         run: |
           mkdir -p tap/Formula
-          scripts/brew-formula.sh "$GITHUB_REF_NAME" release/SHA256SUMS > tap/Formula/zenavo.rb
+          scripts/brew-formula.sh "$TAG" release/SHA256SUMS > tap/Formula/zenavo.rb
           cd tap
           git add Formula/zenavo.rb
           if git diff --cached --quiet; then echo "already up to date"; exit 0; fi
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "zenavo ${GITHUB_REF_NAME#v}"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "zenavo ${TAG#v}"
           git push
 
   npm:
     needs: release
+    if: >-
+      !cancelled() &&
+      (needs.release.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.target != 'homebrew'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -68,16 +89,17 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+      - name: npm with staged publishing
+        run: npm install -g npm@12.2.2
       - name: Binaries of the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download "$GITHUB_REF_NAME" --pattern 'zenavo_*' --pattern SHA256SUMS --dir dist
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "not a release tag: $TAG"; exit 1; }
+          gh release download "$TAG" --pattern 'zenavo_*' --pattern SHA256SUMS --dir dist
           cd dist && sha256sum -c SHA256SUMS
-      - name: Publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Stage
         run: |
-          tag=latest; case "$GITHUB_REF_NAME" in *-*) tag=next;; esac
-          node scripts/npm-packages.mjs "$GITHUB_REF_NAME" dist out
+          tag=latest; case "$TAG" in *-*) tag=next;; esac
+          node scripts/npm-packages.mjs "$TAG" dist out
           sh scripts/npm-publish.sh out "$tag"

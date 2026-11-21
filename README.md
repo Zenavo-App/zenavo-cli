@@ -23,6 +23,7 @@ The scripts ([install.sh](install.sh), [install.ps1](install.ps1)) download the 
 Or with a package manager:
 
 ```sh
+brew trust --formula zenavo-app/tap/zenavo            # Homebrew 7+: allow this formula first
 brew install zenavo-app/tap/zenavo                    # Homebrew, macOS and Linux
 npm install -g zenavo                                 # npm; or run once with npx zenavo
 go install github.com/Zenavo-App/zenavo-cli/cmd/zenavo@latest   # Go 1.26+, from source
